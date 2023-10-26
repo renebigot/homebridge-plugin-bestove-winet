@@ -1,151 +1,242 @@
-import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
+import { CharacteristicGetCallback, CharacteristicSetCallback, CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
-import { ExampleHomebridgePlatform } from './platform';
+import { BestoveWiNETPlatform } from './platform';
+import { BestoveWiNETPlatformConfig } from './types';
+import fetch from 'node-fetch';
+
+const postOptions = (ip, body) => {
+  return {
+    method: 'POST',
+    body,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Content-Length': body.length,
+      'Cookie': 'winet_lang=fr',
+      'Origin': `http://${ip}`,
+      'Referer': `http://${ip}/management.html`,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  };
+};
+
+const valueForRegister = (id, registers) => {
+  return ((registers||[]).find(el => el[1]===id)||[])[2]||0;
+};
 
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class ExamplePlatformAccessory {
+export class BestoveWiNETPlatformAccessory {
   private service: Service;
 
   /**
    * These are just used to create a working example
    * You should implement your own code to track the state of your accessory
    */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
+  private states = {
+    currentHeatingCoolingState: this.platform.Characteristic.CurrentHeatingCoolingState.HEAT as CharacteristicValue,
+    targetHeatingCoolingState: this.platform.Characteristic.TargetHeatingCoolingState.HEAT as CharacteristicValue,
+    currentTemperature: 10 as CharacteristicValue,
+    targetTemperature: 10 as CharacteristicValue,
+    temperatureDisplayUnits: this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS as CharacteristicValue,
   };
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: BestoveWiNETPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Bestove')
+      .setCharacteristic(this.platform.Characteristic.Model, 'WiNET-IoT')
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, '---');
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
-    // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+    this.service = this.accessory.getService(this.platform.Service.Thermostat) ||
+      this.accessory.addService(this.platform.Service.Thermostat);
 
-    // set the service name, this is what is displayed as the default name on the Home app
-    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, this.platform.config.name || 'Pellet stove');
 
-    // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
+    // create handlers for required characteristics
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+      .on('get', this.handleCurrentHeatingCoolingStateGet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .setProps({
+        // Heat only !
+        maxValue: this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
+      })
+      .on('get', this.handleTargetHeatingCoolingStateGet.bind(this))
+      .on('set', this.handleTargetHeatingCoolingStateSet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .on('get', this.handleCurrentTemperatureGet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .on('get', this.handleTargetTemperatureGet.bind(this))
+      .on('set', this.handleTargetTemperatureSet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+      .on('get', this.handleTemperatureDisplayUnitsGet.bind(this))
+      .on('set', this.handleTemperatureDisplayUnitsSet.bind(this));
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
+    this._watchRegisters();
+  }
 
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
+  _currentHeatingCoolingState (state: number): CharacteristicValue {
+    switch (state ) {
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+      case 5:
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      default:
+        return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    }
+  }
 
+  _watchRegisters() {
+    const ip = this.accessory.context.device.ip;
 
-    /**
-     * Creating multiple services of the same type.
-     * 
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     * 
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
-     */
+    if (!ip) {
+      return;
+    }
+    
+    const url = `http://${ip}/ajax/get-registers`;
+    
+    fetch(url, postOptions(ip, 'key=020&category=2'))
+      .then(res => res.json())
+      .catch(err => {
+        this.platform.log.error('Watch register error:', err);
+      })
+      .then(res => {
+        if (!res||!res.ram) {
+          return;
+        }
 
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
+        const currentHeatingCoolingState = this._currentHeatingCoolingState(valueForRegister(33, res.ram));
+        const currentTemperature = valueForRegister(1, res.ram) * 0.5 + 0;
+        const targetTemperature = valueForRegister(125, res.eep);
 
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
+        if (currentHeatingCoolingState !== this.states.currentHeatingCoolingState) {
+          this.states.currentHeatingCoolingState = currentHeatingCoolingState;
+          this.platform.log.info('Current heating cooling state:', currentHeatingCoolingState);
+        }
 
-    /**
-     * Updating characteristics values asynchronously.
-     * 
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     * 
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
+        if (currentTemperature !== this.states.currentTemperature) {
+          this.states.currentTemperature = currentTemperature;
+          this.platform.log.info('Current temperature:', currentTemperature);
+        }
 
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
+        if (targetTemperature !== this.states.targetTemperature) {
+          this.states.targetTemperature = targetTemperature;
+          this.platform.log.info('Target temperature:', targetTemperature);
+        }
 
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
+      })
+      .then(() => {
+        const { polling } = this.platform.config as BestoveWiNETPlatformConfig;
+
+        setTimeout(() => this._watchRegisters.bind(this)(), polling || 2000);
+      });
   }
 
   /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
+   * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
    */
-  setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+  handleCurrentHeatingCoolingStateGet(callback: CharacteristicGetCallback) {
+    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
+    callback(null, this.states.currentHeatingCoolingState);
+  }
 
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
+  /**
+   * Handle requests to Set the current value of the "Current Heating Cooling State" characteristic
+   */
+  handleCurrentHeatingCoolingStateSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this.platform.log.debug('Triggered SET CurrentHeatingCoolingState');
+    this.states.currentHeatingCoolingState = value;
+    callback(null);
+  }
 
-    this.platform.log.debug('Set Characteristic On ->', value);
 
-    // you must call the callback function
+  /**
+   * Handle requests to get the current value of the "Target Heating Cooling State" characteristic
+   */
+  handleTargetHeatingCoolingStateGet(callback: CharacteristicGetCallback) {
+    this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
+    callback(null, this.states.targetHeatingCoolingState);
+  }
+
+  /**
+   * Handle requests to set the "Target Heating Cooling State" characteristic
+   */
+  handleTargetHeatingCoolingStateSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState: '+ value);
+    this.states.targetHeatingCoolingState = value;
+
+    // const url = `http://${this.platform.config.ip}/ajax/set-registers`;
+    
+    // fetch(url, postOptions(this.platform.config.ip, 'key=020&category=2'))
+    //   .catch(err => {
+    //     this.platform.log.error('Set register error:', err);
+    //   });
     callback(null);
   }
 
   /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   * 
-   * GET requests should return as fast as possbile. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   * 
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
+   * Handle requests to get the current value of the "Current Temperature" characteristic
    */
-  getOn(callback: CharacteristicGetCallback) {
-
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
-
-    this.platform.log.debug('Get Characteristic On ->', isOn);
-
-    // you must call the callback function
-    // the first argument should be null if there were no errors
-    // the second argument should be the value to return
-    callback(null, isOn);
+  handleCurrentTemperatureGet(callback: CharacteristicGetCallback) {  
+    this.platform.log.debug('Triggered GET CurrentTemperature');
+    callback(null, this.states.currentTemperature);
   }
 
   /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
+   * Handle requests to get the current value of the "Target Temperature" characteristic
    */
-  setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
-
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
-
-    // you must call the callback function
-    callback(null);
+  handleTargetTemperatureGet(callback: CharacteristicGetCallback) {
+    this.platform.log.debug('Triggered GET TargetTemperature');
+    callback(null, this.states.targetTemperature);
   }
 
+  /**
+   * Handle requests to set the "Target Temperature" characteristic
+   */
+  handleTargetTemperatureSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this.states.targetTemperature = `${Math.floor(Number(value))}`;
+    this.platform.log.debug('Triggered SET TargetTemperature:', value, '->', this.states.targetTemperature);
+    
+    const url = `http://${this.accessory.context.device.ip}/ajax/set-register`;
+
+    fetch(url, postOptions(this.accessory.context.device.ip, `key=002&memory=1&regId=125&value=${this.states.targetTemperature}`))
+      .then(res => res.json())
+      .then(res => {
+        this.platform.log.warn(JSON.stringify(res));
+        callback(null);
+      })
+      .catch(err => {
+        this.platform.log.error('Set register error:', err);
+        callback(err);
+      });
+  }
+
+  /**
+   * Handle requests to get the current value of the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsGet(callback: CharacteristicGetCallback) {
+    this.platform.log.debug('Triggered GET TemperatureDisplayUnits');
+    callback(null, this.states.temperatureDisplayUnits);
+  }
+
+  /**
+   * Handle requests to set the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this.platform.log.info('Triggered SET TemperatureDisplayUnits:', value);
+    this.states.temperatureDisplayUnits = value;
+    callback(null);
+  }
 }

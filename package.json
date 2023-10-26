@@ -3,14 +3,14 @@
   "displayName": "Plugin Name",
   "name": "homebridge-plugin-name",
   "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "description": "homebridge plugin to integrate a WiFi connected Bestove pellet stove to Homekit.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/renebigot/homebridge-plugin-bestove-winet.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/renebigot/homebridge-plugin-bestove-winet"
   },
   "engines": {
     "node": ">=10.17.0",
@@ -24,9 +24,16 @@
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "bestove",
+    "winet",
+    "winet iot",
+    "pellets",
+    "stove"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  },
   "devDependencies": {
     "@types/node": "^14.14.2",
     "@typescript-eslint/eslint-plugin": "^4.5.0",

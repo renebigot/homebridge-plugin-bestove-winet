@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "homebridge-plugin-bestove-winet",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,32 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "Bestove WiNET"
+      },
+      "polling": {
+        "title": "Status polling",
+        "type": "number",
+        "required": false,
+        "default": 2000
+      },
+      "devices": {
+        "title": "Stoves",
+        "type": "array",
+        "required": true,
+        "default": [],
+        "items": {
+          "name": {
+            "title": "Name",
+            "type": "string",
+            "required": true,
+            "default": "Living room"
+          },
+          "ip": {
+            "title": "IP address",
+            "type": "string",
+            "required": true
+          }
+        }
       }
     }
   }
