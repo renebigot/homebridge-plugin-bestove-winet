@@ -1,7 +1,6 @@
 {
-  "private": true,
-  "displayName": "Plugin Name",
-  "name": "homebridge-plugin-name",
+  "displayName": "Bestove pellets stove",
+  "name": "homebridge-plugin-bestove-winet",
   "version": "1.0.0",
   "description": "homebridge plugin to integrate a WiFi connected Bestove pellet stove to Homekit.",
   "license": "Apache-2.0",
