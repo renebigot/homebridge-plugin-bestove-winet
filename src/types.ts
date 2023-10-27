@@ -1,6 +1,7 @@
 import { PlatformConfig } from 'homebridge';
 
 export interface BestoveWiNETPlatformConfig extends PlatformConfig {
-    devices: string[];
+    name: string;
+    ip: string;
     polling: number;
 }

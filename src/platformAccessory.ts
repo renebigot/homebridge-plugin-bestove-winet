@@ -45,7 +45,7 @@ export class BestoveWiNETPlatformAccessory {
 
   constructor(
     private readonly platform: BestoveWiNETPlatform,
-    private readonly accessory: PlatformAccessory,
+    private readonly accessory: PlatformAccessory<BestoveWiNETPlatformConfig>,
   ) {
 
     // set accessory information
@@ -99,7 +99,7 @@ export class BestoveWiNETPlatformAccessory {
   }
 
   _watchRegisters() {
-    const ip = this.accessory.context.device;
+    const { ip } = this.accessory.context;
 
     if (!ip) {
       return;
@@ -179,7 +179,7 @@ export class BestoveWiNETPlatformAccessory {
 
     // const url = `http://${this.platform.config}/ajax/set-registers`;
 
-    // fetch(url, postOptions(this.accessory.context.device, 'key=020&category=2'))
+    // fetch(url, postOptions(this.accessory.context.ip, 'key=020&category=2'))
     //   .catch(err => {
     //     this.platform.log.error('Set register error:', err);
     //   });
@@ -209,9 +209,9 @@ export class BestoveWiNETPlatformAccessory {
     this.states.targetTemperature = `${Math.floor(Number(value))}`;
     this.platform.log.debug('Triggered SET TargetTemperature:', value, '->', this.states.targetTemperature);
 
-    const url = `http://${this.accessory.context.device}/ajax/set-register`;
+    const url = `http://${this.accessory.context.ip}/ajax/set-register`;
 
-    fetch(url, postOptions(this.accessory.context.device, `key=002&memory=1&regId=125&value=${this.states.targetTemperature}`))
+    fetch(url, postOptions(this.accessory.context.ip, `key=002&memory=1&regId=125&value=${this.states.targetTemperature}`))
       .then(res => res.json())
       .then(res => {
         this.platform.log.warn(JSON.stringify(res));

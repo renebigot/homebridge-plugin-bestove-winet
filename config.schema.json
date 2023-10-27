@@ -1,11 +1,11 @@
 {
-  "pluginAlias": "homebridge-plugin-bestove-winet",
+  "pluginAlias": "BestoveWiNET",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
+      "displayName": {
         "title": "Name",
         "type": "string",
         "required": true,
@@ -17,16 +17,11 @@
         "required": false,
         "default": 2000
       },
-      "devices": {
-        "title": "Stoves",
-        "type": "array",
-        "required": true,
-        "default": [],
-        "items": {
-          "title": "IP address",
-          "type": "string",
-          "required": true
-        }
+      "ip": {
+        "title": "IP address",
+        "type": "string",
+        "default": "",
+        "required": true
       }
     }
   }
