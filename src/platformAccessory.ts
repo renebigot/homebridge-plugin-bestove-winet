@@ -1,8 +1,8 @@
 import { CharacteristicGetCallback, CharacteristicSetCallback, CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
+import fetch from 'node-fetch';
 import { BestoveWiNETPlatform } from './platform';
 import { BestoveWiNETPlatformConfig } from './types';
-import fetch from 'node-fetch';
 
 const postOptions = (ip, body) => {
   return {
@@ -20,7 +20,7 @@ const postOptions = (ip, body) => {
 };
 
 const valueForRegister = (id, registers) => {
-  return ((registers||[]).find(el => el[1]===id)||[])[2]||0;
+  return ((registers || []).find(el => el[1] === id) || [])[2] || 0;
 };
 
 /**
@@ -62,7 +62,7 @@ export class BestoveWiNETPlatformAccessory {
     // create handlers for required characteristics
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .on('get', this.handleCurrentHeatingCoolingStateGet.bind(this));
-    
+
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .setProps({
         // Heat only !
@@ -70,14 +70,14 @@ export class BestoveWiNETPlatformAccessory {
       })
       .on('get', this.handleTargetHeatingCoolingStateGet.bind(this))
       .on('set', this.handleTargetHeatingCoolingStateSet.bind(this));
-    
+
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .on('get', this.handleCurrentTemperatureGet.bind(this));
-    
+
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .on('get', this.handleTargetTemperatureGet.bind(this))
       .on('set', this.handleTargetTemperatureSet.bind(this));
-    
+
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .on('get', this.handleTemperatureDisplayUnitsGet.bind(this))
       .on('set', this.handleTemperatureDisplayUnitsSet.bind(this));
@@ -85,8 +85,8 @@ export class BestoveWiNETPlatformAccessory {
     this._watchRegisters();
   }
 
-  _currentHeatingCoolingState (state: number): CharacteristicValue {
-    switch (state ) {
+  _currentHeatingCoolingState(state: number): CharacteristicValue {
+    switch (state) {
       case 1:
       case 2:
       case 3:
@@ -99,21 +99,21 @@ export class BestoveWiNETPlatformAccessory {
   }
 
   _watchRegisters() {
-    const ip = this.accessory.context.device.ip;
+    const ip = this.accessory.context.device;
 
     if (!ip) {
       return;
     }
-    
+
     const url = `http://${ip}/ajax/get-registers`;
-    
+
     fetch(url, postOptions(ip, 'key=020&category=2'))
       .then(res => res.json())
       .catch(err => {
         this.platform.log.error('Watch register error:', err);
       })
       .then(res => {
-        if (!res||!res.ram) {
+        if (!res || !res.ram) {
           return;
         }
 
@@ -174,12 +174,12 @@ export class BestoveWiNETPlatformAccessory {
    * Handle requests to set the "Target Heating Cooling State" characteristic
    */
   handleTargetHeatingCoolingStateSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    this.platform.log.debug('Triggered SET TargetHeatingCoolingState: '+ value);
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState: ' + value);
     this.states.targetHeatingCoolingState = value;
 
-    // const url = `http://${this.platform.config.ip}/ajax/set-registers`;
-    
-    // fetch(url, postOptions(this.platform.config.ip, 'key=020&category=2'))
+    // const url = `http://${this.platform.config}/ajax/set-registers`;
+
+    // fetch(url, postOptions(this.accessory.context.device, 'key=020&category=2'))
     //   .catch(err => {
     //     this.platform.log.error('Set register error:', err);
     //   });
@@ -189,7 +189,7 @@ export class BestoveWiNETPlatformAccessory {
   /**
    * Handle requests to get the current value of the "Current Temperature" characteristic
    */
-  handleCurrentTemperatureGet(callback: CharacteristicGetCallback) {  
+  handleCurrentTemperatureGet(callback: CharacteristicGetCallback) {
     this.platform.log.debug('Triggered GET CurrentTemperature');
     callback(null, this.states.currentTemperature);
   }
@@ -208,10 +208,10 @@ export class BestoveWiNETPlatformAccessory {
   handleTargetTemperatureSet(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     this.states.targetTemperature = `${Math.floor(Number(value))}`;
     this.platform.log.debug('Triggered SET TargetTemperature:', value, '->', this.states.targetTemperature);
-    
-    const url = `http://${this.accessory.context.device.ip}/ajax/set-register`;
 
-    fetch(url, postOptions(this.accessory.context.device.ip, `key=002&memory=1&regId=125&value=${this.states.targetTemperature}`))
+    const url = `http://${this.accessory.context.device}/ajax/set-register`;
+
+    fetch(url, postOptions(this.accessory.context.device, `key=002&memory=1&regId=125&value=${this.states.targetTemperature}`))
       .then(res => res.json())
       .then(res => {
         this.platform.log.warn(JSON.stringify(res));
