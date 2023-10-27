@@ -51,26 +51,25 @@ export class BestoveWiNETPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-
     const { devices } = this.config as BestoveWiNETPlatformConfig;
 
     for (const device of devices) {
-      const uuid = this.api.hap.uuid.generate(device.ip);
+      const uuid = this.api.hap.uuid.generate(device);
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
       if (existingAccessory) {
         if (device) {
           this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
           new BestoveWiNETPlatformAccessory(this, existingAccessory);
-          
+
           this.api.updatePlatformAccessories([existingAccessory]);
         } else if (!device) {
           this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
           this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
         }
       } else {
-        this.log.info('Adding new accessory:', device.name);
-        const accessory = new this.api.platformAccessory(device.name, uuid);
+        this.log.info('Adding new accessory:', device);
+        const accessory = new this.api.platformAccessory(device, uuid);
         accessory.context.device = device;
 
         new BestoveWiNETPlatformAccessory(this, accessory);

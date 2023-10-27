@@ -23,17 +23,9 @@
         "required": true,
         "default": [],
         "items": {
-          "name": {
-            "title": "Name",
-            "type": "string",
-            "required": true,
-            "default": "Living room"
-          },
-          "ip": {
-            "title": "IP address",
-            "type": "string",
-            "required": true
-          }
+          "title": "IP address",
+          "type": "string",
+          "required": true
         }
       }
     }
